@@ -16,6 +16,7 @@
 #include <errno.h>
 #include <unistd.h>
 #include <arpa/inet.h>
+#include <sys/stat.h>
 
 void sigchld_handler(int s)
 {
@@ -25,11 +26,13 @@ void sigchld_handler(int s)
 
 static char* success_string =
     "HTTP/1.1 200 OK\n"
-    "Content-type: %s\n"
+    "Content-Length: %d\n"		
+    "Content-Type: %s\n"
     "\n";
 
 /* HTTP response, header, and body indicating that the we didn't
    understand the request.  */
+static struct stat st;
 
 static char* unsuccessful_string = 
     "HTTP/1.1 400 Bad Request\n"
@@ -76,18 +79,23 @@ void error(char *msg)
     perror(msg);
     exit(1);
 }
-static void get_resource (int newsockfd, char* url) {
-    int resourcefd, i;
+
+static void use_response(int newsockfd, char* url)
+{
+
+	   int resourcefd, i;
     char c, *file_type, *header_type;
     char response[1024];
 
     printf("Retrieving resource %s\n", url);
 
     // Try to open the file. If we can't open the file, tell the client we can't find it and log the error to stderr.
-    resourcefd = open(++url, O_RDONLY);
+    resourcefd = open(++url, O_RDONLY); // Avoiding the back slash
     if (resourcefd < 0) {
         snprintf (response, sizeof (response), notfound_string, url);
+	printf("Message Received is :\n%s", response);
         write (newsockfd, response, strlen (response));
+
         error ("ERROR opening file");
     }
     
@@ -103,67 +111,62 @@ static void get_resource (int newsockfd, char* url) {
         header_type = "image/jpeg";
     else if (strcasecmp (file_type, "gif") == 0)
         header_type = "image/gif";
-    else
+    else if(strcasecmp (file_type, "pdf") == 0)
+	header_type ="application/pdf";
+	else
         header_type = "text/html";
-
+	
+    stat(url, &st);
+    int size = st.st_size;
     // Begin to write the response to the client: OK, file type
-    snprintf(response, sizeof (response), success_string, header_type);
+    snprintf(response, sizeof (response), success_string, size, header_type);
+
     write(newsockfd, response, strlen (response));
+    
+    printf("Message Received is :\n%s", response);
     while ( (i = read(resourcefd, &c, 1)) ) {
         if ( i < 0 )
             error("ERROR reading from file.");
         if ( write(newsockfd, &c, 1) < 1 )
             error("ERROR sending file.");
     }
-}
+   
 
+}
 static void handle_request (int newsockfd)
 {
     char buffer[512];
-    ssize_t bytes_read;
-
+    int bytes_read;
+    bzero(buffer, 512);
     /* Read some data from the client.  */
-    bytes_read = read (newsockfd, buffer, sizeof (buffer) - 1);
+    bytes_read = read (newsockfd, buffer, 511);
     if (bytes_read > 0) {
-        char method[sizeof (buffer)];
-        char url[sizeof (buffer)];
-        char protocol[sizeof (buffer)];
+        char method[100];
+        char url[bytes_read];
+        char protocol[40];
 
-        /* Some data was read successfully.  NUL-terminate the buffer so
-        we can use string operations on it.  */
+        //It is a C buffer so have to null terminate
         buffer[bytes_read] = '\0';
-        /* The first line the client sends is the HTTP request, which is
-        composed of a method, the requested page, and the protocol
-        version.  */
+
+      
+	//Requests from the textbook sample code has to following formate - method, 
+        //the file/page and then what version of http we are using
         sscanf (buffer, "%s %s %s", method, url, protocol);
-        printf("Received request:\n%s", buffer);
-
-        /* Check the protocol field.  We understand HTTP versions 1.0 and
-        1.1.  */
-        if (strcmp (protocol, "HTTP/1.0") && strcmp (protocol, "HTTP/1.1")) {
-            /* We don't understand this protocol.  Report a bad response.  */
-            write (newsockfd, unsuccessful_string, strlen (unsuccessful_string));
-        }
-        else if (strcmp (method, "GET")) {
-            /* This server only implements the GET method.  The client
-            specified some other method, so report the failure.  */
-            char response[1024];
-
-            snprintf (response, sizeof (response), unknownrequest_string, method);
-            write (newsockfd, response, strlen (response));
-        }
-        else 
-            /* A valid request.  Process it.  */
-            get_resource (newsockfd, url);
-    }
-    else if (bytes_read == 0)
-        /* The client closed the connection before sending any data.
-        Nothing to do.  */
+        printf("Message Received is :\n%s", buffer);
+	//Basically Finished Part A. Above mentioned will dump the request to control
+	
+	use_response(newsockfd,url);
+	}
+   else if (bytes_read == 0)
+       	//Some internet issue. Meet and Fahad we should do something
         ;
     else 
         /* The call to read failed.  */
         error("ERROR reading from request");
 }
+
+
+
 
 int main(int argc, char *argv[])
 {
@@ -198,17 +201,7 @@ int main(int argc, char *argv[])
      listen(sockfd,10);
      
      clilen = sizeof(cli_addr);
-     
-     /****** Kill Zombie Processes ******/
-	/*
-     sa.sa_handler = sigchld_handler; // reap all dead processes
-     sigemptyset(&sa.sa_mask);
-     sa.sa_flags = SA_RESTART;
-     if (sigaction(SIGCHLD, &sa, NULL) == -1) {
-         perror("sigaction");
-         exit(1);
-     }
-*/
+  
      /*********************************/
      
      while (1) {

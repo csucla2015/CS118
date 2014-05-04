@@ -93,7 +93,7 @@ static void use_response(int newsockfd, char* url)
     resourcefd = open(++url, O_RDONLY); // Avoiding the back slash
     if (resourcefd < 0) {
         snprintf (response, sizeof (response), notfound_string, url);
-	printf("Message Received is :\n%s", response);
+	printf("HTTP Response Message sent is:\n%s", response);
         write (newsockfd, response, strlen (response));
 
         error ("ERROR opening file");
@@ -123,7 +123,7 @@ static void use_response(int newsockfd, char* url)
 
     write(newsockfd, response, strlen (response));
     
-    printf("Message Received is :\n%s", response);
+    printf("HTTP Response Message Sent is :\n%s", response);
     while ( (i = read(resourcefd, &c, 1)) ) {
         if ( i < 0 )
             error("ERROR reading from file.");
@@ -152,7 +152,7 @@ static void handle_request (int newsockfd)
 	//Requests from the textbook sample code has to following formate - method, 
         //the file/page and then what version of http we are using
         sscanf (buffer, "%s %s %s", method, url, protocol);
-        printf("Message Received is :\n%s", buffer);
+        printf("HTTP Request Message Received is:\n%s", buffer);
 	//Basically Finished Part A. Above mentioned will dump the request to control
 	
 	use_response(newsockfd,url);
